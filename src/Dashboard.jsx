@@ -7,6 +7,7 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  LabelList,
   Legend,
   Pie,
   PieChart,
@@ -70,14 +71,25 @@ function Empty() {
   return <div className="empty">▥<span>Sem dados no período selecionado.</span></div>;
 }
 
+function visibleValue(value) {
+  return Number(value) > 0 ? value : '';
+}
+
+function PieValueLabel({ cx, cy, midAngle, innerRadius, outerRadius, value }) {
+  if (!value) return null;
+  const radius = innerRadius + (outerRadius - innerRadius) * 0.55;
+  const angle = (-midAngle * Math.PI) / 180;
+  return <text x={cx + radius * Math.cos(angle)} y={cy + radius * Math.sin(angle)} fill="white" textAnchor="middle" dominantBaseline="central" fontSize="11" fontWeight="800">{value}</text>;
+}
+
 function Card({ title, subtitle, className = '', children }) {
   return <section className={`card ${className}`}><header><h2>{title}</h2>{subtitle && <p>{subtitle}</p>}</header><div className="card-body">{children}</div></section>;
 }
 
-function RankChart({ rows }) {
-  const data = rows.slice(0, 10).map((row) => ({ ...row, label: short(row.name) }));
+function RankChart({ rows, dataKey, color, name }) {
+  const data = [...rows].sort((a, b) => b[dataKey] - a[dataKey]).slice(0, 10).map((row) => ({ ...row, label: short(row.name) }));
   if (!data.length) return <Empty />;
-  return <div className="chart rank-chart"><ResponsiveContainer width="100%" height="100%"><BarChart data={data} layout="vertical" margin={{ left: 12, right: 18 }}><CartesianGrid horizontal={false} strokeDasharray="4 4" /><XAxis type="number" allowDecimals={false} /><YAxis type="category" dataKey="label" width={140} tick={{ fontSize: 11 }} /><Tooltip /><Legend /><Bar dataKey="visits" name="Visitas" fill="#246dcc" radius={[0, 5, 5, 0]} /><Bar dataKey="equipment" name="Equipamentos" fill="#24a36a" radius={[0, 5, 5, 0]} /></BarChart></ResponsiveContainer></div>;
+  return <div className="chart rank-chart"><ResponsiveContainer width="100%" height="100%"><BarChart data={data} layout="vertical" margin={{ left: 12, right: 24 }}><CartesianGrid horizontal={false} strokeDasharray="4 4" /><XAxis type="number" allowDecimals={false} /><YAxis type="category" dataKey="label" width={140} tick={{ fontSize: 11 }} /><Tooltip /><Bar dataKey={dataKey} name={name} fill={color} radius={[0, 5, 5, 0]}><LabelList dataKey={dataKey} position="insideRight" fill="#fff" fontSize={11} fontWeight={800} formatter={visibleValue} /></Bar></BarChart></ResponsiveContainer></div>;
 }
 
 export default function Dashboard() {
@@ -157,12 +169,14 @@ export default function Dashboard() {
       {error && <div className="error panel"><strong>Não foi possível carregar o painel.</strong><span>{error}</span></div>}
       <section className="kpis">{kpis.map(([label, value, icon]) => <article className="kpi" key={label}><span>{icon}</span><div><small>{label}</small><strong>{loading ? '—' : Number(value).toLocaleString('pt-BR')}</strong></div></article>)}</section>
       <section className="grid">
-        <Card title="Situação dos equipamentos" subtitle="Resultado mais recente no período.">{!metrics?.totals.equipment ? <Empty /> : <div className="status-layout"><div className="chart pie-chart"><ResponsiveContainer><PieChart><Pie data={metrics.statuses} dataKey="value" nameKey="label" innerRadius={54} outerRadius={82} paddingAngle={3}>{metrics.statuses.map((item, i) => <Cell key={item.key} fill={STATUS_COLORS[i]} />)}</Pie><Tooltip /></PieChart></ResponsiveContainer></div><div className="status-list">{metrics.statuses.map((item, i) => <div key={item.key}><i style={{ background: STATUS_COLORS[i] }} /><span>{item.label}</span><strong>{item.value}</strong></div>)}</div></div>}</Card>
+        <Card title="Situação dos equipamentos" subtitle="Resultado mais recente no período.">{!metrics?.totals.equipment ? <Empty /> : <div className="status-layout"><div className="chart pie-chart"><ResponsiveContainer><PieChart><Pie data={metrics.statuses} dataKey="value" nameKey="label" innerRadius={54} outerRadius={82} paddingAngle={3} label={<PieValueLabel />} labelLine={false}>{metrics.statuses.map((item, i) => <Cell key={item.key} fill={STATUS_COLORS[i]} />)}</Pie><Tooltip /></PieChart></ResponsiveContainer></div><div className="status-list">{metrics.statuses.map((item, i) => <div key={item.key}><i style={{ background: STATUS_COLORS[i] }} /><span>{item.label}</span><strong>{item.value}</strong></div>)}</div></div>}</Card>
         <Card title="Apontamentos do período" subtitle="Destaques gerados automaticamente."><ol className="insights">{insightsFor(metrics).map((text, i) => <li key={text}><span>{i + 1}</span><p>{text}</p></li>)}</ol></Card>
-        <Card className="wide" title="Frequência de visitas por dia" subtitle="Dias com maior movimento e volume de equipamentos.">{!daily.length ? <Empty /> : <div className="chart daily-chart"><ResponsiveContainer><AreaChart data={daily} margin={{ left: 0, right: 12, top: 12 }}><defs><linearGradient id="fillVisits" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#0756b5" stopOpacity=".35" /><stop offset="95%" stopColor="#0756b5" stopOpacity=".02" /></linearGradient></defs><CartesianGrid vertical={false} strokeDasharray="4 4" /><XAxis dataKey="day" /><YAxis allowDecimals={false} width={28} /><Tooltip /><Legend /><Area type="monotone" dataKey="equipment" name="Equipamentos" stroke="#24a36a" fill="transparent" strokeWidth={3} /><Area type="monotone" dataKey="visits" name="Visitas" stroke="#0756b5" fill="url(#fillVisits)" strokeWidth={3} /></AreaChart></ResponsiveContainer></div>}</Card>
-        <Card title="Ranking de escolas" subtitle="Visitas e equipamentos por unidade."><RankChart rows={metrics?.schools || []} /></Card>
-        <Card title="Ranking de analistas" subtitle="Volume registrado por responsável."><RankChart rows={metrics?.analysts || []} /></Card>
-        <Card className="wide" title="Modelos mais atendidos" subtitle="Distribuição por resultado em cada modelo.">{!modelData.length ? <Empty /> : <div className="chart model-chart"><ResponsiveContainer><BarChart data={modelData} layout="vertical" margin={{ left: 10, right: 18 }}><CartesianGrid horizontal={false} strokeDasharray="4 4" /><XAxis type="number" allowDecimals={false} /><YAxis type="category" dataKey="label" width={145} tick={{ fontSize: 11 }} /><Tooltip /><Legend /><Bar dataKey="ok" name="OK" stackId="s" fill={MODEL_COLORS.ok} /><Bar dataKey="ng_with_warranty" name="NG com garantia" stackId="s" fill={MODEL_COLORS.ng_with_warranty} /><Bar dataKey="ng_without_warranty" name="NG sem garantia" stackId="s" fill={MODEL_COLORS.ng_without_warranty} /><Bar dataKey="unserviceable" name="Inservível" stackId="s" fill={MODEL_COLORS.unserviceable} /><Bar dataKey="reuse" name="Reaproveitamento" stackId="s" fill={MODEL_COLORS.reuse} /></BarChart></ResponsiveContainer></div>}</Card>
+        <Card className="wide" title="Frequência de visitas por dia" subtitle="Dias com maior movimento e volume de equipamentos.">{!daily.length ? <Empty /> : <div className="chart daily-chart"><ResponsiveContainer><AreaChart data={daily} margin={{ left: 0, right: 12, top: 24, bottom: 12 }}><defs><linearGradient id="fillVisits" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#0756b5" stopOpacity=".35" /><stop offset="95%" stopColor="#0756b5" stopOpacity=".02" /></linearGradient></defs><CartesianGrid vertical={false} strokeDasharray="4 4" /><XAxis dataKey="day" /><YAxis allowDecimals={false} width={28} /><Tooltip /><Legend /><Area type="monotone" dataKey="equipment" name="Equipamentos" stroke="#24a36a" fill="transparent" strokeWidth={3}><LabelList dataKey="equipment" position="bottom" fill="#187448" fontSize={10} formatter={visibleValue} /></Area><Area type="monotone" dataKey="visits" name="Visitas" stroke="#0756b5" fill="url(#fillVisits)" strokeWidth={3}><LabelList dataKey="visits" position="top" fill="#0756b5" fontSize={10} fontWeight={700} formatter={visibleValue} /></Area></AreaChart></ResponsiveContainer></div>}</Card>
+        <Card title="Ranking de escolas por visitas" subtitle="Unidades com maior número de visitas."><RankChart rows={metrics?.schools || []} dataKey="visits" name="Visitas" color="#246dcc" /></Card>
+        <Card title="Ranking de escolas por equipamentos" subtitle="Unidades com maior volume de equipamentos."><RankChart rows={metrics?.schools || []} dataKey="equipment" name="Equipamentos" color="#24a36a" /></Card>
+        <Card title="Ranking de analistas por visitas" subtitle="Responsáveis com maior número de visitas."><RankChart rows={metrics?.analysts || []} dataKey="visits" name="Visitas" color="#246dcc" /></Card>
+        <Card title="Ranking de analistas por equipamentos" subtitle="Responsáveis com maior volume de equipamentos."><RankChart rows={metrics?.analysts || []} dataKey="equipment" name="Equipamentos" color="#24a36a" /></Card>
+        <Card className="wide" title="Modelos mais atendidos" subtitle="Distribuição por resultado em cada modelo.">{!modelData.length ? <Empty /> : <div className="chart model-chart"><ResponsiveContainer><BarChart data={modelData} layout="vertical" margin={{ left: 10, right: 18 }}><CartesianGrid horizontal={false} strokeDasharray="4 4" /><XAxis type="number" allowDecimals={false} /><YAxis type="category" dataKey="label" width={145} tick={{ fontSize: 11 }} /><Tooltip /><Legend /><Bar dataKey="ok" name="OK" stackId="s" fill={MODEL_COLORS.ok}><LabelList dataKey="ok" position="center" fill="#fff" fontSize={10} fontWeight={800} formatter={visibleValue} /></Bar><Bar dataKey="ng_with_warranty" name="NG com garantia" stackId="s" fill={MODEL_COLORS.ng_with_warranty}><LabelList dataKey="ng_with_warranty" position="center" fill="#fff" fontSize={10} fontWeight={800} formatter={visibleValue} /></Bar><Bar dataKey="ng_without_warranty" name="NG sem garantia" stackId="s" fill={MODEL_COLORS.ng_without_warranty}><LabelList dataKey="ng_without_warranty" position="center" fill="#fff" fontSize={10} fontWeight={800} formatter={visibleValue} /></Bar><Bar dataKey="unserviceable" name="Inservível" stackId="s" fill={MODEL_COLORS.unserviceable}><LabelList dataKey="unserviceable" position="center" fill="#fff" fontSize={10} fontWeight={800} formatter={visibleValue} /></Bar><Bar dataKey="reuse" name="Reaproveitamento" stackId="s" fill={MODEL_COLORS.reuse}><LabelList dataKey="reuse" position="center" fill="#fff" fontSize={10} fontWeight={800} formatter={visibleValue} /></Bar></BarChart></ResponsiveContainer></div>}</Card>
       </section>
       <footer>Dados consolidados do Supabase · Atualizado {metrics ? new Date(metrics.generatedAt).toLocaleString('pt-BR') : '—'}</footer>
     </main>
