@@ -2,6 +2,16 @@
 -- Safe to run alongside sti_dashboard_metrics: no OS table or record is changed.
 begin;
 
+create table if not exists public.sti_dashboard_managers (
+  email text primary key check (email = lower(email) and length(trim(email)) > 3),
+  created_at timestamptz not null default now()
+);
+alter table public.sti_dashboard_managers enable row level security;
+revoke all on public.sti_dashboard_managers from anon, authenticated;
+insert into public.sti_dashboard_managers(email)
+values ('angeloruivo@gmail.com')
+on conflict (email) do nothing;
+
 create or replace function public.sti_dashboard_metrics_filtered(
   p_start date default null,
   p_end date default null,
