@@ -101,6 +101,8 @@ export default function Dashboard() {
   const [metrics, setMetrics] = useState(null);
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth());
+  const [school, setSchool] = useState('');
+  const [analyst, setAnalyst] = useState('');
 
   useEffect(() => {
     let active = true;
@@ -123,19 +125,31 @@ export default function Dashboard() {
     if (!user) return;
     setLoading(true);
     setError('');
-    const { data, error: requestError } = await supabase.rpc('sti_dashboard_metrics', rangeFor(year, month));
+    const { data, error: requestError } = await supabase.rpc('sti_dashboard_metrics_filtered', {
+      ...rangeFor(year, month),
+      p_school: school || null,
+      p_analyst: analyst || null,
+    });
     if (requestError) {
       setMetrics(null);
-      setError(requestError.message.includes('STI_DASHBOARD_FORBIDDEN') ? 'Esta conta Google não possui acesso de gestor à Central Analítica.' : requestError.message);
+      setError(
+        requestError.message.includes('STI_DASHBOARD_FORBIDDEN')
+          ? 'Esta conta Google não possui acesso de gestor à Central Analítica.'
+          : requestError.message.includes('sti_dashboard_metrics_filtered')
+            ? 'Execute o arquivo SQL 004_dashboard_filters.sql no Supabase para ativar os novos filtros.'
+            : requestError.message,
+      );
     } else setMetrics(data);
     setLoading(false);
-  }, [user, year, month]);
+  }, [user, year, month, school, analyst]);
 
   useEffect(() => { void load(); }, [load]);
 
   const years = useMemo(() => Array.from({ length: 7 }, (_, i) => now.getFullYear() - i), [now]);
   const daily = metrics ? fillDays(metrics.daily, year, month) : [];
   const modelData = (metrics?.models || []).slice(0, 12).map((row) => ({ ...row, label: short(row.model, 21) }));
+  const schoolOptions = metrics?.filterOptions?.schools || [];
+  const analystOptions = metrics?.filterOptions?.analysts || [];
 
   async function login() {
     setError('');
@@ -165,7 +179,7 @@ export default function Dashboard() {
   return <div className="shell">
     <header className="topbar"><div className="topbar-inner"><div className="brand"><span>▥</span><div><strong>CENTRAL ANALÍTICA</strong><small>Indicadores de gestão</small></div></div><div className="account"><span>{user.user_metadata?.full_name || user.email}</span><button onClick={logout}>Sair</button></div></div></header>
     <main className="main">
-      <section className="intro"><div><small>VISÃO CONSOLIDADA</small><h1>Desempenho dos atendimentos</h1><p>Visitas encerradas e equipamentos atendidos no período.</p></div><div className="filters"><select aria-label="Ano" value={year} onChange={(e) => setYear(Number(e.target.value))}><option value="0">Todos os anos</option>{years.map((item) => <option key={item} value={item}>{item}</option>)}</select><select aria-label="Mês" value={month} disabled={!year} onChange={(e) => setMonth(Number(e.target.value))}><option value="-1">Todos os meses</option>{MONTHS.map((item, i) => <option key={item} value={i}>{item}</option>)}</select><button onClick={load} disabled={loading}>{loading ? 'Atualizando…' : 'Atualizar'}</button></div></section>
+      <section className="intro"><div><small>VISÃO CONSOLIDADA</small><h1>Desempenho dos atendimentos</h1><p>Visitas encerradas e equipamentos atendidos no período.</p></div><div className="filters"><select aria-label="Ano" value={year} onChange={(e) => setYear(Number(e.target.value))}><option value="0">Todos os anos</option>{years.map((item) => <option key={item} value={item}>{item}</option>)}</select><select aria-label="Mês" value={month} disabled={!year} onChange={(e) => setMonth(Number(e.target.value))}><option value="-1">Todos os meses</option>{MONTHS.map((item, i) => <option key={item} value={i}>{item}</option>)}</select><select aria-label="Escola" value={school} onChange={(e) => setSchool(e.target.value)}><option value="">Todas as escolas</option>{schoolOptions.map((item) => <option key={item.value} value={item.value}>{item.name}{item.cie ? ` · ${item.cie}` : ''}</option>)}</select><select aria-label="Analista" value={analyst} onChange={(e) => setAnalyst(e.target.value)}><option value="">Todos os analistas</option>{analystOptions.map((item) => <option key={item} value={item}>{item}</option>)}</select><button onClick={load} disabled={loading}>{loading ? 'Atualizando…' : 'Atualizar'}</button></div></section>
       {error && <div className="error panel"><strong>Não foi possível carregar o painel.</strong><span>{error}</span></div>}
       <section className="kpis">{kpis.map(([label, value, icon]) => <article className="kpi" key={label}><span>{icon}</span><div><small>{label}</small><strong>{loading ? '—' : Number(value).toLocaleString('pt-BR')}</strong></div></article>)}</section>
       <section className="grid">
